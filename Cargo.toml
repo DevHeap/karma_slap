@@ -1,0 +1,8 @@
+[package]
+authors = ["Mike Lubinets <lubinetsm@yandex.ru>"]
+name = "fitness_karma"
+version = "0.1.0"
+
+[dependencies]
+clap = "~2.29"
+error-chain = "0.11.0"
