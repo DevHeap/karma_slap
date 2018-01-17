@@ -1,6 +1,6 @@
 [package]
 authors = ["Mike Lubinets <lubinetsm@yandex.ru>"]
-name = "fitness_karma"
+name = "karma_slap"
 version = "0.1.0"
 
 [dependencies]
