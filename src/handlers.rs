@@ -90,7 +90,7 @@ impl Executor {
                     .collect::<Vec<_>>()
             ).unwrap().clone();
 
-            let amount_coeff = severity as f64 * coeff * user.faults_current as f64;
+            let amount_coeff = severity * user.faults_current as f64;
             punishment.amount = (punishment.amount as f64 * amount_coeff).ceil() as u64;
 
             HistoryEntry {
