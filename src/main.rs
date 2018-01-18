@@ -1,13 +1,37 @@
+#![feature(conservative_impl_trait)]
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json as json;
+extern crate chrono;
+extern crate app_dirs;
+extern crate rand;
+
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate clap;
 
-use clap::{Arg, App, SubCommand};
+
+mod handlers;
+mod storage;
+mod error;
+mod types;
+
+use types::*;
+use error::*;
+
+use clap::{Arg, ArgMatches, App, SubCommand};
+
+pub const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
+    name: "Karma Slap",
+    author: "Mike Lubinets <lubinetsm@yandex.ru>",
+};
 
 fn parse_args() -> Result<Mode> {
-    let matches = App::new("Fitness Karma")
-        .author("Mike Lubinets <lubinetsm@yandex.ru>")
+    let matches = App::new(APP_INFO.name)
+        .author(APP_INFO.author)
         .subcommand(SubCommand::with_name("add")
             .about("Add a new karma entity")
             .subcommand(SubCommand::with_name("fault")
@@ -16,7 +40,9 @@ fn parse_args() -> Result<Mode> {
             .subcommand(SubCommand::with_name("punishment")
                 .about("Add a new punishment")
                 .arg(Arg::from_usage("<PUNISHMENT>"))
-                .arg(Arg::from_usage("-a, --amount [AMOUNT]")))
+                .arg(Arg::with_name("amount")
+                        .short("a")
+                        .takes_value(true)))
             .subcommand(SubCommand::with_name("user")
                 .about("Add a new user")
                 .arg(Arg::from_usage("<USERNAME>"))))
@@ -32,9 +58,9 @@ fn parse_args() -> Result<Mode> {
                 .arg(Arg::from_usage("<USERNAME> Username who's history to show (or 'All')"))))
         .subcommand(SubCommand::with_name("set")
             .about("Set variables")
-            .subcommand(SubCommand::with_name("severity_coeff")
+            .subcommand(SubCommand::with_name("coefficient")
                 .about("Set severity coefficient")
-                .arg(Arg::from_usage("<SEV_COEFF>"))))
+                .arg(Arg::from_usage("<COEFFICIENT>"))))
         .subcommand(SubCommand::with_name("punish")
             .about("Make 'em suffer")
             .arg(Arg::from_usage("<USERNAME> Name of the guilty user"))
@@ -53,7 +79,7 @@ fn parse_args() -> Result<Mode> {
                 ("punishment", Some(matches)) => {
                     let punishment = matches.value_of("PUNISHMENT").unwrap()
                         .to_string();
-                    let amount = value_t!(matches.value_of("AMOUNT"), u64)
+                    let amount = value_t!(matches.value_of("amount"), u64)
                         .unwrap_or(1);
                     let punishment = Punishment {
                         name: punishment,
@@ -64,9 +90,10 @@ fn parse_args() -> Result<Mode> {
                 ("user", Some(matches)) => {
                     let user = matches.value_of("USERNAME").unwrap()
                         .to_string();
+                    let user = User::new(user);
                     Ok(Mode::Add(Add::User(user)))
                 },
-                _ => bail!(ErrorKind::UnknownSubcommand)
+                _ => print_usage_and_exit(&matches)
             }
         },
         ("list", Some(matches)) => {
@@ -85,16 +112,16 @@ fn parse_args() -> Result<Mode> {
                         .to_string();
                     Ok(Mode::List(List::History(user)))
                 },
-                _ => bail!(ErrorKind::UnknownSubcommand)
+                _ => print_usage_and_exit(&matches)
             }
         },
         ("set", Some(matches)) => {
             match matches.subcommand() {
-                ("severity_coeff", Some(matches)) => {
-                    let coeff = value_t!(matches.value_of("SEV_COEFF"), f64).unwrap();
+                ("coefficient", Some(matches)) => {
+                    let coeff = value_t!(matches.value_of("COEFFICIENT"), f64).unwrap();
                     Ok(Mode::Set(Set::Coefficient(coeff)))
                 }
-                _ => bail!(ErrorKind::UnknownSubcommand)
+                _ => print_usage_and_exit(&matches)
             }
         },
         ("punish", Some(matches)) => {
@@ -109,66 +136,23 @@ fn parse_args() -> Result<Mode> {
                 severity
             }))
         }
-        _ => bail!(ErrorKind::UnknownSubcommand)
+        _ => print_usage_and_exit(&matches)
     }
 }
 
-#[derive(Debug, Clone)]
-enum Mode {
-    Add(Add),
-    List(List),
-    Set(Set),
-    Punish(Punish)
+fn print_usage_and_exit(matches: &ArgMatches) -> ! {
+    println!("{}", matches.usage());
+    std::process::exit(1);
 }
 
-#[derive(Debug, Clone)]
-enum Add {
-    Fault(Fault),
-    Punishment(Punishment),
-    User(User)
-}
-
-#[derive(Debug, Clone)]
-enum List {
-    Faults,
-    Punishments,
-    Users,
-    History(Username)
-}
-
-#[derive(Debug, Clone)]
-enum Set {
-    Coefficient(f64)
-}
-
-#[derive(Debug, Clone)]
-struct Punish {
-    user: String,
-    fault: String,
-    severity: u16
-}
-
-type Fault = String;
-
-#[derive(Debug, Clone)]
-struct Punishment {
-    name: String,
-    amount: u64,
-}
-
-type Username = String;
-type User = Username;
+use storage::Storage;
 
 fn main() {
     let mode = parse_args().unwrap();
-    println!("{:#?}", mode);
-}
 
-error_chain! {
-    errors {
-        UnknownSubcommand {
-            description("Unknown subcommand or insufficient parameters\nPlease refer to --help")
-            display("Unknown subcommand or insufficient parameters\nPlease refer to --help")
-        }
-    }
+    let storage = Storage::load_default_path().unwrap_or_default();
+
+    handlers::Executor::new(storage)
+        .execute(mode)
+        .unwrap();
 }

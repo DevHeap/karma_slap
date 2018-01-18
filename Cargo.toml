@@ -4,5 +4,14 @@ name = "karma_slap"
 version = "0.1.0"
 
 [dependencies]
+app_dirs = "1.1.1"
 clap = "~2.29"
 error-chain = "0.11.0"
+rand = "0.4.2"
+serde = "1.0.27"
+serde_derive = "1.0.27"
+serde_json = "1.0.9"
+
+[dependencies.chrono]
+features = ["serde"]
+version = "0.4.0"
